@@ -22,6 +22,7 @@ library(scales)
 library(gt)
 library(sf)
 library(tidycensus)
+library(patchwork)
 set.seed(metadatar$seed_set[1])
 options(digits = 4, max.print = 99, warnPartialMatchDollar = TRUE, 
         tibble.print_max = 30, scipen = 999, nwarnings = 5)
@@ -99,10 +100,10 @@ cash_money <- function(x) {
 # census key and other setup ------------------------------------------
 
 # set api key if needed !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-census_api_key("111", install = TRUE)
+# census_api_key("111", install = TRUE)
 
 # set up the parameters for what to query from the acs5 !!!!!!!!!!!!!!!!!!
-census_params <- list(state = "NC",  
+census_params <- list(state = "SC",  
                       year = 2019, 
                       variables = data.frame(var_codes = c("B01003_001", 
                                                            "B06011_001", 
@@ -111,13 +112,16 @@ census_params <- list(state = "NC",
                                                             "median income", 
                                                             "median yr structure built")))
 
+fips_codes <- fips_codes %>% 
+  mutate(GEOID = paste0(state_code, county_code))
+
 # variable options from the american community survey !!!!!!!!!!!!!!!!!
 # var_options <- load_variables(2019, "acs5", cache = TRUE)
-var_options <- var_options %>% 
-  mutate(code_suffix = str_sub(name, 
-                               start = str_length(name) - 2), 
-         code_suffix = as.double(code_suffix), 
-         concept_20 = str_sub(concept, end = 20))
+# var_options <- var_options %>% 
+#   mutate(code_suffix = str_sub(name, 
+#                                start = str_length(name) - 2), 
+#          code_suffix = as.double(code_suffix), 
+#          concept_20 = str_sub(concept, end = 20))
 
 # review the variables that are available to query ::::::::::::::::::::
 # var_options %>% 
@@ -154,9 +158,14 @@ df_state <- left_join(df_state, census_params$variables,
                       by = 'var_codes')
 
 df_county <- df_county %>% 
-  rename(var_codes = variable)
+  rename(var_codes = variable) %>% 
+  mutate(state_code = str_sub(GEOID, start = 1, end = 2))
 df_county <- left_join(df_county, census_params$variables, 
                        by = 'var_codes')
+
+df_county <- left_join(df_county, fips_codes, by = "GEOID")
+df_county <- df_county %>% 
+  mutate(county_name = str_remove(county, " County"))
 
 # cleanup ?????????????????????????????????????????????????????????
 ls()
@@ -199,15 +208,37 @@ fun_county_map <- function(df_func = df_county,
          caption = "*Value capped at " %ps% measure_cap)
   return(plt1)}
 
+# create a simple county lollipop bar
+fun_county_lolli <- function(df_func = df_county, 
+                             dfv_state = df_state, 
+                             measure_var, show_this_many = 1) {
+  dfv_state <- dfv_state %>% filter(var_detail == !!measure_var)
+  plt_sub <- "State-level " %ps% measure_var %ps% " = " %ps% 
+    prettyNum(dfv_state$estimate, big.mark = ",")
+  df_func <- df_func %>% filter(var_detail == !!measure_var)
+  plt1 <- df_func %>% 
+    arrange(desc(estimate)) %>% 
+    slice(1:show_this_many) %>% 
+    ggplot(aes(x = estimate, y = reorder(county_name, estimate))) + 
+    geom_segment(aes(x = 0, xend = estimate, yend = county_name), 
+                 color = "#6ECB63") + 
+    geom_point(size = 4, color = "#6ECB63") + 
+    theme_minimal() + theme(legend.position = "none") +
+    labs(title = toupper(measure_var),
+         subtitle = plt_sub, fill = "", 
+         y = "County Name", x = "")
+  return(plt1)}
 
 # ^ -----
 
 # run the visuals ----------------------------------------------------
 
-fun_county_map(measure_var = "population estimate", 
-               measure_cap = 500000)
+(gg1 <- fun_county_map(measure_var = "population estimate", 
+                      measure_cap = 500000))
 
+(gg2 <- fun_county_lolli(measure_var = "population estimate", 
+                        show_this_many = 15))
 
-
+gg1 + gg2
 
 # ^ -----
