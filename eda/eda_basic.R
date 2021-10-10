@@ -169,16 +169,34 @@ sizer(df_county)
 
 # viz functions ----------------------------------------------------
 
-fun_county_map <- function(df_func = df_county, measure_var) {
+# create a simple county filled map
+fun_county_map <- function(df_func = df_county, 
+                           dfv_state = df_state, 
+                           measure_var, measure_cap = NA) {
+  dfv_state <- dfv_state %>% filter(var_detail == !!measure_var)
+  plt_sub <- "State-level " %ps% measure_var %ps% " = " %ps% 
+    prettyNum(dfv_state$estimate, big.mark = ",")
+  df_func <- df_func %>% filter(var_detail == !!measure_var)
+  measure_cap <- ifelse(is.na(measure_cap), 
+                        max(df_func$estimate), 
+                        measure_cap)
   plt1 <- df_func %>% 
-    filter(var_detail == !!measure_var) %>% 
+    mutate(estimate = ifelse(estimate > measure_cap, 
+                             measure_cap, estimate)) %>% 
     ggplot() + 
-    geom_sf(aes(fill = estimate)) + 
+    geom_sf(aes(fill = estimate), alpha = 0.85, color = "black") + 
+    geom_sf(data = dfv_state, color = "black", size = 1, 
+            alpha = 0) + 
+    scale_fill_distiller(palette = "Greens", 
+                         direction = 1) + 
     guides(fill = guide_colorbar(title.position = "top", 
                                  title.hjust = 0.5, 
                                  barwidth = unit(20, 'lines'), 
                                  barheight = unit(0.5, 'lines'))) + 
-    theme_minimal() + theme(legend.position = "top")
+    theme_minimal() + theme(legend.position = "top") + 
+    labs(title = toupper(measure_var), 
+         subtitle = plt_sub, fill = "", 
+         caption = "*Value capped at " %ps% measure_cap)
   return(plt1)}
 
 
@@ -186,7 +204,8 @@ fun_county_map <- function(df_func = df_county, measure_var) {
 
 # run the visuals ----------------------------------------------------
 
-fun_county_map(df_county, measure_var = "population estimate")
+fun_county_map(measure_var = "population estimate", 
+               measure_cap = 500000)
 
 
 
