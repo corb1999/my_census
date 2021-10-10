@@ -98,8 +98,97 @@ cash_money <- function(x) {
 
 # census key and other setup ------------------------------------------
 
+# set api key if needed !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+census_api_key("111", install = TRUE)
+
+# set up the parameters for what to query from the acs5 !!!!!!!!!!!!!!!!!!
+census_params <- list(state = "NC",  
+                      year = 2019, 
+                      variables = data.frame(var_codes = c("B01003_001", 
+                                                           "B06011_001", 
+                                                           "B25035_001"), 
+                                             var_detail = c("population estimate", 
+                                                            "median income", 
+                                                            "median yr structure built")))
+
+# variable options from the american community survey !!!!!!!!!!!!!!!!!
+# var_options <- load_variables(2019, "acs5", cache = TRUE)
+var_options <- var_options %>% 
+  mutate(code_suffix = str_sub(name, 
+                               start = str_length(name) - 2), 
+         code_suffix = as.double(code_suffix), 
+         concept_20 = str_sub(concept, end = 20))
+
+# review the variables that are available to query ::::::::::::::::::::
+# var_options %>% 
+#   filter(code_suffix == 1) %>% 
+#   View()
+
+# ^ -----
+
+# query the census api to get data with geometries attached --------------
+
+# pull data at a state level
+df_state <- get_acs(state = census_params$state, 
+                    geography = "state", 
+                    year = census_params$year, 
+                    variables = census_params$variables$var_codes, 
+                    geometry = TRUE, 
+                    cache_table = TRUE)
+df_state
+
+# pull data at a county level
+df_county <- get_acs(state = census_params$state, 
+                     geography = "county", 
+                     year = census_params$year, 
+                     variables = census_params$variables$var_codes, 
+                     geometry = TRUE, 
+                     cache_table = TRUE)
+head(df_county)
+
+# clean up the dataframes ::::::::::::::::::::::::::::::::::::::::::::
+
+df_state <- df_state %>% 
+  rename(var_codes = variable)
+df_state <- left_join(df_state, census_params$variables, 
+                      by = 'var_codes')
+
+df_county <- df_county %>% 
+  rename(var_codes = variable)
+df_county <- left_join(df_county, census_params$variables, 
+                       by = 'var_codes')
+
+# cleanup ?????????????????????????????????????????????????????????
+ls()
+trash()
+mem_used()
+obj_size(df_county)
+sizer(df_county)
+
+# ^ -----
+
+# viz functions ----------------------------------------------------
+
+fun_county_map <- function(df_func = df_county, measure_var) {
+  plt1 <- df_func %>% 
+    filter(var_detail == !!measure_var) %>% 
+    ggplot() + 
+    geom_sf(aes(fill = estimate)) + 
+    guides(fill = guide_colorbar(title.position = "top", 
+                                 title.hjust = 0.5, 
+                                 barwidth = unit(20, 'lines'), 
+                                 barheight = unit(0.5, 'lines'))) + 
+    theme_minimal() + theme(legend.position = "top")
+  return(plt1)}
 
 
 # ^ -----
 
+# run the visuals ----------------------------------------------------
 
+fun_county_map(df_county, measure_var = "population estimate")
+
+
+
+
+# ^ -----
