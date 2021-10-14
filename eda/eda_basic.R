@@ -103,7 +103,7 @@ cash_money <- function(x) {
 # census_api_key("111", install = TRUE)
 
 # set up the parameters for what to query from the acs5 !!!!!!!!!!!!!!!!!!
-census_params <- list(state = "SC",  
+census_params <- list(state = "WV",  
                       year = 2019, 
                       variables = data.frame(var_codes = c("B01003_001", 
                                                            "B06011_001", 
@@ -159,6 +159,15 @@ df_county <- get_acs(state = census_params$state,
                      cache_table = TRUE)
 head(df_county)
 
+# pull data at a zipcode level
+df_zpcd <- get_acs(state = census_params$state, 
+                   geography = "zcta", 
+                   year = census_params$year, 
+                   variables = census_params$variables$var_codes, 
+                   geometry = TRUE, 
+                   cache_table = TRUE)
+head(df_zpcd)
+
 # clean up the dataframes ::::::::::::::::::::::::::::::::::::::::::::
 
 df_state <- df_state %>% 
@@ -182,6 +191,9 @@ df_county <- left_join(df_county, fips_codes, by = "GEOID")
 df_county <- df_county %>% 
   mutate(county_name = str_remove(county, " County"))
 
+df_zpcd <- df_zpcd %>% rename(var_codes = variable) 
+df_zpcd <- left_join(df_zpcd, census_params$variables, by = 'var_codes')
+
 # cleanup ?????????????????????????????????????????????????????????
 ls()
 trash()
@@ -199,8 +211,41 @@ fun_county_map <- function(df_func = df_county,
                            measure_var, measure_cap = NA) {
   dfv_state <- dfv_state %>% filter(var_detail == !!measure_var)
   plt_sub <- "State-level " %ps% measure_var %ps% " = " %ps% 
-    prettyNum(dfv_state$estimate, big.mark = ",") %ps% 
-    "; 5-year growth rate = " %ps% 
+    prettyNum(dfv_state$estimate, big.mark = ",") %ps% "\n" %ps% 
+    "5-year growth rate = " %ps% 
+    (round(dfv_state$estimate / dfv_state$estimate_prior - 1, 
+           digits = 3) * 100) %ps% "%"
+  df_func <- df_func %>% filter(var_detail == !!measure_var)
+  measure_cap <- ifelse(is.na(measure_cap), 
+                        max(df_func$estimate), 
+                        measure_cap)
+  plt1 <- df_func %>% 
+    mutate(estimate = ifelse(estimate > measure_cap, 
+                             measure_cap, estimate)) %>% 
+    ggplot() + 
+    geom_sf(aes(fill = estimate), alpha = 0.85, color = "black") + 
+    geom_sf(data = dfv_state, color = "black", size = 1, 
+            alpha = 0) + 
+    scale_fill_distiller(palette = "Greens", 
+                         direction = 1) + 
+    guides(fill = guide_colorbar(title.position = "top", 
+                                 title.hjust = 0.5, 
+                                 barwidth = unit(20, 'lines'), 
+                                 barheight = unit(0.5, 'lines'))) + 
+    theme_minimal() + theme(legend.position = "top") + 
+    labs(title = toupper(measure_var), 
+         subtitle = plt_sub, fill = "", 
+         caption = "*Value capped at " %ps% measure_cap)
+  return(plt1)}
+
+# create a simple zipcode filled map
+fun_zip_map <- function(df_func = df_zpcd, 
+                        dfv_state = df_state, 
+                        measure_var, measure_cap = NA) {
+  dfv_state <- dfv_state %>% filter(var_detail == !!measure_var)
+  plt_sub <- "State-level " %ps% measure_var %ps% " = " %ps% 
+    prettyNum(dfv_state$estimate, big.mark = ",") %ps% "\n" %ps% 
+    "5-year growth rate = " %ps% 
     (round(dfv_state$estimate / dfv_state$estimate_prior - 1, 
            digits = 3) * 100) %ps% "%"
   df_func <- df_func %>% filter(var_detail == !!measure_var)
@@ -252,11 +297,14 @@ fun_county_lolli <- function(df_func = df_county,
 # run the visuals ----------------------------------------------------
 
 (gg1 <- fun_county_map(measure_var = "population estimate", 
-                      measure_cap = 500000))
+                       measure_cap = 500000))
 
 (gg2 <- fun_county_lolli(measure_var = "population estimate", 
-                        show_this_many = 15))
+                         show_this_many = 15))
 
-gg1 + gg2
+(gg3 <- fun_zip_map(measure_var = "population estimate", 
+                    measure_cap = 30000))
+
+(gg1 + gg3) / gg2
 
 # ^ -----
