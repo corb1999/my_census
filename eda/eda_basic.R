@@ -141,6 +141,15 @@ df_state <- get_acs(state = census_params$state,
                     cache_table = TRUE)
 df_state
 
+# pull data at a state level, 5 years ago
+df_state_5 <- get_acs(state = census_params$state, 
+                      geography = "state", 
+                      year = census_params$year -5, 
+                      variables = census_params$variables$var_codes, 
+                      geometry = FALSE, 
+                      cache_table = TRUE)
+df_state_5
+
 # pull data at a county level
 df_county <- get_acs(state = census_params$state, 
                      geography = "county", 
@@ -153,9 +162,15 @@ head(df_county)
 # clean up the dataframes ::::::::::::::::::::::::::::::::::::::::::::
 
 df_state <- df_state %>% 
-  rename(var_codes = variable)
+  rename(var_codes = variable) 
 df_state <- left_join(df_state, census_params$variables, 
                       by = 'var_codes')
+df_state_5 <- df_state_5 %>% 
+  rename(var_codes = variable) %>% 
+  mutate(estimate_prior = estimate) %>% 
+  select(var_codes, estimate_prior)
+df_state <- left_join(df_state, df_state_5, by = "var_codes")
+rm(df_state_5)
 
 df_county <- df_county %>% 
   rename(var_codes = variable) %>% 
@@ -184,7 +199,10 @@ fun_county_map <- function(df_func = df_county,
                            measure_var, measure_cap = NA) {
   dfv_state <- dfv_state %>% filter(var_detail == !!measure_var)
   plt_sub <- "State-level " %ps% measure_var %ps% " = " %ps% 
-    prettyNum(dfv_state$estimate, big.mark = ",")
+    prettyNum(dfv_state$estimate, big.mark = ",") %ps% 
+    "; 5-year growth rate = " %ps% 
+    (round(dfv_state$estimate / dfv_state$estimate_prior - 1, 
+           digits = 3) * 100) %ps% "%"
   df_func <- df_func %>% filter(var_detail == !!measure_var)
   measure_cap <- ifelse(is.na(measure_cap), 
                         max(df_func$estimate), 
