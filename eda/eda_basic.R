@@ -103,29 +103,35 @@ cash_money <- function(x) {
 # census_api_key("111", install = TRUE)
 
 # set up the parameters for what to query from the acs5 !!!!!!!!!!!!!!!!!!
-census_params <- list(state = "WV",  
+census_params <- list(state = "CT",  
                       year = 2019, 
                       variables = data.frame(var_codes = c("B01003_001", 
-                                                           "B06011_001", 
-                                                           "B25035_001"), 
+                                                           "B06011_001",
+                                                           "B25105_001", 
+                                                           "B25031_001", 
+                                                           "B25031_003", 
+                                                           "B25031_004"), 
                                              var_detail = c("population estimate", 
-                                                            "median income", 
-                                                            "median yr structure built")))
+                                                            "median income",  
+                                                            "median monthly housing costs", 
+                                                            "median gross rent", 
+                                                            "median gross rent 1bd", 
+                                                            "median gross rent 2bd")))
 
 fips_codes <- fips_codes %>% 
   mutate(GEOID = paste0(state_code, county_code))
 
 # variable options from the american community survey !!!!!!!!!!!!!!!!!
 # var_options <- load_variables(2019, "acs5", cache = TRUE)
-# var_options <- var_options %>% 
-#   mutate(code_suffix = str_sub(name, 
-#                                start = str_length(name) - 2), 
-#          code_suffix = as.double(code_suffix), 
+# var_options <- var_options %>%
+#   mutate(code_suffix = str_sub(name,
+#                                start = str_length(name) - 2),
+#          code_suffix = as.double(code_suffix),
 #          concept_20 = str_sub(concept, end = 20))
 
 # review the variables that are available to query ::::::::::::::::::::
-# var_options %>% 
-#   filter(code_suffix == 1) %>% 
+# var_options %>%
+#   filter(code_suffix == 1) %>%
 #   View()
 
 # ^ -----
@@ -144,7 +150,7 @@ df_state
 # pull data at a state level, 5 years ago
 df_state_5 <- get_acs(state = census_params$state, 
                       geography = "state", 
-                      year = census_params$year -5, 
+                      year = census_params$year - 5, 
                       variables = census_params$variables$var_codes, 
                       geometry = FALSE, 
                       cache_table = TRUE)
@@ -292,19 +298,43 @@ fun_county_lolli <- function(df_func = df_county,
          y = "County Name", x = "")
   return(plt1)}
 
+fun_scatter_zip <- function(df_func = df_zpcd, 
+                            mvar_x, mvar_y) {
+  df_x <- df_func %>% filter(var_detail == !!mvar_x) %>% 
+    rename(mvar_x = estimate) %>% as_tibble() %>% 
+    select(-geometry)
+  df_y <- df_func %>% filter(var_detail == !!mvar_y) %>%
+    rename(mvar_y = estimate) %>% as_tibble() %>% 
+    select(-geometry)
+  df_gg <- left_join(df_x, df_y, by = 'GEOID')
+  plt_capt <- "NA records X = " %ps% sum(is.na(df_gg$mvar_x)) %ps% 
+    "; NA records Y = " %ps% sum(is.na(df_gg$mvar_y))
+  plt1 <- df_gg %>% 
+    ggplot(aes(x = mvar_x, y = mvar_y)) + 
+    geom_point(alpha = 0.6, size = 1.5) + 
+    theme_minimal() + 
+    labs(x = mvar_x, y = mvar_y, caption = plt_capt)
+  return(plt1)}
+
+
 # ^ -----
 
 # run the visuals ----------------------------------------------------
 
-(gg1 <- fun_county_map(measure_var = "population estimate", 
-                       measure_cap = 500000))
+fun_scatter_zip(mvar_x = "median gross rent", 
+                mvar_y = "population estimate")
 
-(gg2 <- fun_county_lolli(measure_var = "population estimate", 
+(gg1 <- fun_county_map(measure_var = "median gross rent", 
+                       measure_cap = 5000))
+
+(gg2 <- fun_county_lolli(measure_var = "median gross rent", 
                          show_this_many = 15))
 
-(gg3 <- fun_zip_map(measure_var = "population estimate", 
-                    measure_cap = 30000))
+(gg3 <- fun_zip_map(measure_var = "median gross rent", 
+                    measure_cap = 5000))
 
 (gg1 + gg3) / gg2
 
 # ^ -----
+
+
