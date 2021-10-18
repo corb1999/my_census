@@ -99,11 +99,13 @@ cash_money <- function(x) {
 
 # census key and other setup ------------------------------------------
 
+options(tigris_use_cache = TRUE)
+
 # set api key if needed !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 # census_api_key("111", install = TRUE)
 
 # set up the parameters for what to query from the acs5 !!!!!!!!!!!!!!!!!!
-census_params <- list(state = "CT",  
+census_params <- list(state = "ME",  
                       year = 2019, 
                       variables = data.frame(var_codes = c("B01003_001", 
                                                            "B06011_001",
@@ -174,6 +176,16 @@ df_zpcd <- get_acs(state = census_params$state,
                    cache_table = TRUE)
 head(df_zpcd)
 
+# pull census data by county_subdivision, for NE with big counties
+# df_neweng <- get_acs(state = census_params$state, 
+#                      geography = "county subdivision", 
+#                      year = census_params$year, 
+#                      variables = census_params$variables$var_codes, 
+#                      geometry = TRUE,
+#                      cache_table = TRUE)
+# head(df_neweng)
+
+
 # clean up the dataframes ::::::::::::::::::::::::::::::::::::::::::::
 
 df_state <- df_state %>% 
@@ -200,12 +212,15 @@ df_county <- df_county %>%
 df_zpcd <- df_zpcd %>% rename(var_codes = variable) 
 df_zpcd <- left_join(df_zpcd, census_params$variables, by = 'var_codes')
 
+# df_neweng <- df_neweng %>% rename(var_codes = variable)
+# df_neweng <- left_join(df_neweng, census_params$variables, by = 'var_codes')
+
 # cleanup ?????????????????????????????????????????????????????????
 ls()
 trash()
 mem_used()
-obj_size(df_county)
-sizer(df_county)
+obj_size(df_zpcd)
+sizer(df_zpcd)
 
 # ^ -----
 
@@ -292,45 +307,55 @@ fun_county_lolli <- function(df_func = df_county,
     geom_segment(aes(x = 0, xend = estimate, yend = county_name), 
                  color = "#6ECB63") + 
     geom_point(size = 4, color = "#6ECB63") + 
+    geom_label(aes(x = estimate * 1.08, label = estimate), 
+               size = 2.5, color = "#6ECB63") + 
     theme_minimal() + theme(legend.position = "none") +
     labs(title = toupper(measure_var),
          subtitle = plt_sub, fill = "", 
          y = "County Name", x = "")
   return(plt1)}
 
+# simple scatterplot of 2 variables from the census query by zip
 fun_scatter_zip <- function(df_func = df_zpcd, 
                             mvar_x, mvar_y) {
   df_x <- df_func %>% filter(var_detail == !!mvar_x) %>% 
-    rename(mvar_x = estimate) %>% as_tibble() %>% 
-    select(-geometry)
+    rename(mvar_x = estimate) %>% as_tibble() %>% select(-geometry)
   df_y <- df_func %>% filter(var_detail == !!mvar_y) %>%
-    rename(mvar_y = estimate) %>% as_tibble() %>% 
-    select(-geometry)
+    rename(mvar_y = estimate) %>% as_tibble() %>% select(-geometry)
   df_gg <- left_join(df_x, df_y, by = 'GEOID')
   plt_capt <- "NA records X = " %ps% sum(is.na(df_gg$mvar_x)) %ps% 
     "; NA records Y = " %ps% sum(is.na(df_gg$mvar_y))
   plt1 <- df_gg %>% 
     ggplot(aes(x = mvar_x, y = mvar_y)) + 
-    geom_point(alpha = 0.6, size = 1.5) + 
+    geom_rug(alpha = 0.25) + 
+    geom_vline(aes(xintercept = median(mvar_x, na.rm = TRUE)), 
+               linetype = 2, color = "red") + 
+    geom_hline(aes(yintercept = median(mvar_y, na.rm = TRUE)), 
+               linetype = 2, color = "red") + 
+    geom_point(aes(x = median(mvar_x, na.rm = TRUE), 
+                   y = median(mvar_y, na.rm = TRUE)), 
+               color = "red", size = 5) + 
+    geom_point(alpha = 0.7, size = 1.5) + 
     theme_minimal() + 
     labs(x = mvar_x, y = mvar_y, caption = plt_capt)
   return(plt1)}
-
 
 # ^ -----
 
 # run the visuals ----------------------------------------------------
 
-fun_scatter_zip(mvar_x = "median gross rent", 
+fun_scatter_zip(df_func = df_zpcd, 
+                mvar_x = "median income", 
                 mvar_y = "population estimate")
 
-(gg1 <- fun_county_map(measure_var = "median gross rent", 
-                       measure_cap = 5000))
+# draw some maps :::::::::::::::::::::::::::::::::::::::::::::::::
+(gg1 <- fun_county_map(measure_var = "population estimate", 
+                       measure_cap = 500000))
 
-(gg2 <- fun_county_lolli(measure_var = "median gross rent", 
+(gg2 <- fun_county_lolli(measure_var = "population estimate", 
                          show_this_many = 15))
 
-(gg3 <- fun_zip_map(measure_var = "median gross rent", 
+(gg3 <- fun_zip_map(measure_var = "population estimate", 
                     measure_cap = 5000))
 
 (gg1 + gg3) / gg2
