@@ -23,6 +23,7 @@ library(gt)
 library(sf)
 library(tidycensus)
 library(patchwork)
+library(tigris)
 set.seed(metadatar$seed_set[1])
 options(digits = 4, max.print = 99, warnPartialMatchDollar = TRUE, 
         tibble.print_max = 30, scipen = 999, nwarnings = 5)
@@ -131,10 +132,27 @@ fips_codes <- fips_codes %>%
 #          code_suffix = as.double(code_suffix),
 #          concept_20 = str_sub(concept, end = 20))
 
+# var_options <- load_variables(year = 2020, 
+#                               dataset = "pl", cache = TRUE)
+
 # review the variables that are available to query ::::::::::::::::::::
 # var_options %>%
 #   filter(code_suffix == 1) %>%
 #   View()
+
+# ^ -----
+
+# tigris geo objects ----------------------------------------
+
+# get the coastline
+# clockin()
+# coastline <- coastline(year = 2019)
+# clockout()
+# 
+# coastline <- coastline %>% 
+#   filter(NAME %in% c('Atlantic', 'Gulf'))
+
+# ggplot() + geom_sf(data = coastline)
 
 # ^ -----
 
@@ -150,13 +168,13 @@ df_state <- get_acs(state = census_params$state,
 df_state
 
 # pull data at a state level, 5 years ago
-df_state_5 <- get_acs(state = census_params$state, 
-                      geography = "state", 
-                      year = census_params$year - 5, 
-                      variables = census_params$variables$var_codes, 
-                      geometry = FALSE, 
-                      cache_table = TRUE)
-df_state_5
+# df_state_5 <- get_acs(state = census_params$state, 
+#                       geography = "state", 
+#                       year = (census_params$year) - 5, 
+#                       variables = census_params$variables$var_codes, 
+#                       geometry = FALSE, 
+#                       cache_table = TRUE)
+# df_state_5
 
 # pull data at a county level
 df_county <- get_acs(state = census_params$state, 
@@ -192,12 +210,13 @@ df_state <- df_state %>%
   rename(var_codes = variable) 
 df_state <- left_join(df_state, census_params$variables, 
                       by = 'var_codes')
-df_state_5 <- df_state_5 %>% 
-  rename(var_codes = variable) %>% 
-  mutate(estimate_prior = estimate) %>% 
-  select(var_codes, estimate_prior)
-df_state <- left_join(df_state, df_state_5, by = "var_codes")
-rm(df_state_5)
+
+# df_state_5 <- df_state_5 %>% 
+#   rename(var_codes = variable) %>% 
+#   mutate(estimate_prior = estimate) %>% 
+#   select(var_codes, estimate_prior)
+# df_state <- left_join(df_state, df_state_5, by = "var_codes")
+# rm(df_state_5)
 
 df_county <- df_county %>% 
   rename(var_codes = variable) %>% 
@@ -232,10 +251,7 @@ fun_county_map <- function(df_func = df_county,
                            measure_var, measure_cap = NA) {
   dfv_state <- dfv_state %>% filter(var_detail == !!measure_var)
   plt_sub <- "State-level " %ps% measure_var %ps% " = " %ps% 
-    prettyNum(dfv_state$estimate, big.mark = ",") %ps% "\n" %ps% 
-    "5-year growth rate = " %ps% 
-    (round(dfv_state$estimate / dfv_state$estimate_prior - 1, 
-           digits = 3) * 100) %ps% "%"
+    prettyNum(dfv_state$estimate, big.mark = ",") 
   df_func <- df_func %>% filter(var_detail == !!measure_var)
   measure_cap <- ifelse(is.na(measure_cap), 
                         max(df_func$estimate), 
@@ -265,10 +281,7 @@ fun_zip_map <- function(df_func = df_zpcd,
                         measure_var, measure_cap = NA) {
   dfv_state <- dfv_state %>% filter(var_detail == !!measure_var)
   plt_sub <- "State-level " %ps% measure_var %ps% " = " %ps% 
-    prettyNum(dfv_state$estimate, big.mark = ",") %ps% "\n" %ps% 
-    "5-year growth rate = " %ps% 
-    (round(dfv_state$estimate / dfv_state$estimate_prior - 1, 
-           digits = 3) * 100) %ps% "%"
+    prettyNum(dfv_state$estimate, big.mark = ",") 
   df_func <- df_func %>% filter(var_detail == !!measure_var)
   measure_cap <- ifelse(is.na(measure_cap), 
                         max(df_func$estimate), 
